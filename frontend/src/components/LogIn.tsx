@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import API_URL from "../services/api";
+import ReCaptcha, { ReCaptchaRef } from './ReCaptcha';
 
 type UserType = "user" | "doctor";
 
@@ -31,15 +32,18 @@ const LogIn = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { setUserType: setAuthUserType, setIsAuthenticated } = useAuth();
+  
+  // ADD RECAPTCHA REF
+  const recaptchaRef = useRef<ReCaptchaRef>(null);
 
-  // User login function
-  const userLogin = async (email: string, password: string): Promise<User> => {
+  // User login function - UPDATED to include recaptcha
+  const userLogin = async (email: string, password: string, recaptchaToken: string): Promise<User> => {
     const response = await fetch(`${API_URL}/users/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, recaptchaToken }),
     });
 
     const data = await response.json();
@@ -48,8 +52,8 @@ const LogIn = () => {
     return data;
   };
 
-  // Doctor login function with debugging
-  const doctorLogin = async (email: string, password: string): Promise<Doctor> => {
+  // Doctor login function - UPDATED to include recaptcha
+  const doctorLogin = async (email: string, password: string, recaptchaToken: string): Promise<Doctor> => {
     try {
       console.log("Sending doctor login request for email:", email);
       
@@ -58,7 +62,7 @@ const LogIn = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, recaptchaToken }),
       });
 
       const text = await response.text();
@@ -95,9 +99,16 @@ const LogIn = () => {
     setError(null);
 
     try {
+      // RECAPTCHA VERIFICATION
+      const recaptchaValue = recaptchaRef.current?.getValue();
+      if (!recaptchaValue) {
+        setError('Please complete the reCAPTCHA verification');
+        return;
+      }
+
       if (userType === "user") {
         console.log("Attempting user login...");
-        const user = await userLogin(email, password);
+        const user = await userLogin(email, password, recaptchaValue);
 
         // Set auth context and localStorage
         setAuthUserType("user");
@@ -105,29 +116,22 @@ const LogIn = () => {
         localStorage.setItem("userId", String(user.id));
         localStorage.setItem("userEmail", user.email);
         localStorage.setItem("userName", user.name);
-        localStorage.setItem("userType", "user"); // Important - must match exactly!
+        localStorage.setItem("userType", "user");
 
-        // Important: log what we're storing
         console.log("Logged in as user:", user.name, "with type:", "user");
-        
-        // Navigate to the patient dashboard
         navigate("/patient-dashboard");
       } else {
         console.log("Attempting doctor login...");
-        const doctor = await doctorLogin(email, password);
+        const doctor = await doctorLogin(email, password, recaptchaValue);
 
-        // Set auth context and localStorage
         setAuthUserType("doctor");
         setIsAuthenticated(true);
         localStorage.setItem("userId", String(doctor.id));
         localStorage.setItem("userEmail", doctor.email);
         localStorage.setItem("userName", doctor.name);
-        localStorage.setItem("userType", "doctor"); // Important - must match exactly!
+        localStorage.setItem("userType", "doctor");
 
-        // Important: log what we're storing
         console.log("Logged in as doctor:", doctor.name, "with type:", "doctor");
-        
-        // Navigate to the doctor dashboard
         navigate("/doctor-dashboard");
       }
     } catch (error) {
@@ -137,6 +141,8 @@ const LogIn = () => {
       } else {
         setError("An unexpected error occurred");
       }
+      // RESET RECAPTCHA ON ERROR
+      recaptchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -216,6 +222,9 @@ const LogIn = () => {
               required
             />
           </div>
+
+          {/* ADD RECAPTCHA HERE */}
+          <ReCaptcha ref={recaptchaRef} />
 
           <button
             type="submit"

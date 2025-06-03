@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react"; // Add useRef
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import API_URL from "../services/api"; // Keep using API_URL from your service
+import API_URL from "../services/api";
+import ReCaptcha, { ReCaptchaRef } from './ReCaptcha'; // Add this import
 
 type UserType = "user" | "doctor";
 
@@ -39,13 +40,14 @@ const checkEmailExists = async (email: string): Promise<{ exists: boolean; type?
   }
 };
 
-// Doctor signup function (keep as is)
+// Doctor signup function - UPDATED to include recaptcha
 const doctorSignUp = async (
   name: string,
   email: string,
   phone: string,
   specialisation: string,
-  password: string
+  password: string,
+  recaptchaToken: string // Add this parameter
 ) => {
   try {
     const response = await fetch(`${API_URL}/doctors/signup`, {
@@ -53,7 +55,7 @@ const doctorSignUp = async (
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, email, phone, specialisation, password }),
+      body: JSON.stringify({ name, email, phone, specialisation, password, recaptchaToken }), // Add recaptchaToken
     });
 
     const data = await response.json();
@@ -66,12 +68,13 @@ const doctorSignUp = async (
   }
 };
 
-// User/Patient signup function (keep as is)
+// User/Patient signup function - UPDATED to include recaptcha
 const userSignUp = async (
   name: string,
   email: string,
   phone: string,
-  password: string
+  password: string,
+  recaptchaToken: string // Add this parameter
 ) => {
   try {
     const response = await fetch(`${API_URL}/users/signup`, {
@@ -79,7 +82,7 @@ const userSignUp = async (
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, email, phone, password }),
+      body: JSON.stringify({ name, email, phone, password, recaptchaToken }), // Add recaptchaToken
     });
 
     const data = await response.json();
@@ -103,6 +106,10 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  
+  // ADD RECAPTCHA REF
+  const recaptchaRef = useRef<ReCaptchaRef>(null);
+
   const { setUserType: setAuthUserType } = useAuth();
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -111,6 +118,13 @@ const SignUp = () => {
     setError(null);
 
     try {
+      // VERIFY RECAPTCHA FIRST
+      const recaptchaValue = recaptchaRef.current?.getValue();
+      if (!recaptchaValue) {
+        setError('Please complete the reCAPTCHA verification');
+        return;
+      }
+
       // First, check if this email already exists
       const emailCheck = await checkEmailExists(email);
       
@@ -119,37 +133,36 @@ const SignUp = () => {
         return;
       }
 
-      // Proceed with signup if email is unique (keep existing code)
+      // Proceed with signup if email is unique
       if (userType === "user") {
-        const newUser = await userSignUp(name, email, phone, password);
+        const newUser = await userSignUp(name, email, phone, password, recaptchaValue); // Add recaptchaValue
 
         // Set user context data
         setAuthUserType("user");
-        localStorage.setItem("userId", String(newUser.id)); // Ensure id is a string
+        localStorage.setItem("userId", String(newUser.id));
         localStorage.setItem("userEmail", newUser.email);
         localStorage.setItem("userName", newUser.name);
-        localStorage.setItem("userType", "user"); // Add this for better session tracking
+        localStorage.setItem("userType", "user");
       } else {
         const newDoctor = await doctorSignUp(
           name,
           email,
           phone,
           specialisation,
-          password
+          password,
+          recaptchaValue // Add recaptchaValue
         );
 
         // Set user context data
         setAuthUserType("doctor");
-        localStorage.setItem("userId", String(newDoctor.id)); // Ensure id is a string
+        localStorage.setItem("userId", String(newDoctor.id));
         localStorage.setItem("userEmail", newDoctor.email);
         localStorage.setItem("userName", newDoctor.name);
-        localStorage.setItem("userType", "doctor"); // Add this for better session tracking
+        localStorage.setItem("userType", "doctor");
       }
 
       // Redirect to appropriate dashboard
-      navigate(
-        userType === "user" ? "/patient-dashboard" : "/doctor-dashboard"
-      );
+      navigate(userType === "user" ? "/patient-dashboard" : "/doctor-dashboard");
     } catch (error) {
       console.error("Signup error:", error);
       if (error instanceof Error) {
@@ -157,12 +170,13 @@ const SignUp = () => {
       } else {
         setError("An unexpected error occurred");
       }
+      // RESET RECAPTCHA ON ERROR
+      recaptchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
   };
 
-  // Rest of the component remains unchanged
   return (
     <div className="min-h-screen bg-gray-100 p-8 flex flex-col items-center justify-center">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
@@ -205,7 +219,7 @@ const SignUp = () => {
         )}
 
         <form onSubmit={handleSignUp} className="space-y-4">
-          {/* Name field - was missing */}
+          {/* Name field */}
           <div>
             <label
               htmlFor="name"
@@ -241,7 +255,7 @@ const SignUp = () => {
             />
           </div>
 
-          {/* Phone number field - fixed label */}
+          {/* Phone number field */}
           <div>
             <label
               htmlFor="phone"
@@ -294,6 +308,9 @@ const SignUp = () => {
               required
             />
           </div>
+
+          {/* ADD RECAPTCHA HERE */}
+          <ReCaptcha ref={recaptchaRef} />
 
           <button
             type="submit"

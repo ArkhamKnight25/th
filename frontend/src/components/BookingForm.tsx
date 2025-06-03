@@ -1,7 +1,8 @@
 import { useAuth } from '../context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react'; // Add useRef
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../services/api';
+import ReCaptcha, { ReCaptchaRef } from './ReCaptcha'; // Add this import
 
 interface Doctor {
   id: number;
@@ -172,6 +173,9 @@ const BookingForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
+  // ADD RECAPTCHA REF
+  const recaptchaRef = useRef<ReCaptchaRef>(null);
+  
   const navigate = useNavigate();
   
   // Check if user is authenticated
@@ -250,13 +254,20 @@ const BookingForm = () => {
     fetchDoctors();
   }, []);
   
-  // Submit booking
+  // Submit booking - UPDATED
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     
     try {
+      // VERIFY RECAPTCHA FIRST
+      const recaptchaValue = recaptchaRef.current?.getValue();
+      if (!recaptchaValue) {
+        setError('Please complete the reCAPTCHA verification');
+        return;
+      }
+
       if (!appointmentDate || !appointmentTime) {
         throw new Error('Please select both date and time for your appointment');
       }
@@ -275,12 +286,12 @@ const BookingForm = () => {
         doctor_id: selectedDoctorId,
         address,
         test_type: testType,
-        appointment_time: appointmentDateTime.toISOString()
+        appointment_time: appointmentDateTime.toISOString(),
+        recaptchaToken: recaptchaValue // Add this
       };
       
       console.log("Submitting booking:", bookingData);
       
-      // FIXED: Use the correct API URL without duplicate /api/
       const bookingUrl = `${API_URL}/bookings`;
       console.log("Submitting booking to:", bookingUrl);
       
@@ -301,7 +312,6 @@ const BookingForm = () => {
           const errorData = JSON.parse(errorText);
           errorMessage = errorData.error || errorMessage;
         } catch (e) {
-          // If parsing fails, use the response text
           console.error("Error parsing error response:", e, "Response:", errorText);
           errorMessage = errorText || `Error: ${response.status} ${response.statusText}`;
         }
@@ -329,6 +339,8 @@ const BookingForm = () => {
       } else {
         setError('An unexpected error occurred');
       }
+      // RESET RECAPTCHA ON ERROR
+      recaptchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -387,6 +399,7 @@ const BookingForm = () => {
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               required
             >
+              <option value="">-- Select a test type --</option>
               {testTypes.map((type) => (
                 <option key={type} value={type}>
                   {type}
@@ -427,15 +440,13 @@ const BookingForm = () => {
             </div>
           </div>
           
-          {/* Doctor Selection Dropdown */}
+          {/* Doctor Selection */}
           <div>
             <label htmlFor="doctor" className="block text-gray-700 text-sm font-bold mb-2">
-              Select Doctor (Optional)
+              Preferred Doctor (Optional)
             </label>
             {doctorsLoading ? (
-              <div className="animate-pulse flex space-x-4">
-                <div className="h-10 bg-gray-200 rounded w-full"></div>
-              </div>
+              <p className="text-gray-500">Loading doctors...</p>
             ) : (
               <select
                 id="doctor"
@@ -457,6 +468,9 @@ const BookingForm = () => {
               </p>
             )}
           </div>
+          
+          {/* ADD RECAPTCHA HERE */}
+          <ReCaptcha ref={recaptchaRef} />
           
           {/* Submit Button */}
           <div>

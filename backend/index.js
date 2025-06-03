@@ -44,13 +44,48 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const verifyRecaptcha = async (token) => {
+  if (!token) {
+    console.log('No reCAPTCHA token provided');
+    return false;
+  }
+
+  try {
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+    if (!secretKey) {
+      console.error('RECAPTCHA_SECRET_KEY not found in environment variables');
+      return false;
+    }
+    
+    console.log('Verifying reCAPTCHA token...');
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `secret=${secretKey}&response=${token}`
+    });
+    
+    const data = await response.json();
+    console.log('reCAPTCHA verification result:', data);
+    return data.success;
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error);
+    return false;
+  }
+};
+
 try {
   console.log("Supabase client initialized successfully");
 
   // Doctor Authentication
   app.post("/api/doctors/signup", async (req, res) => {
     try {
-      const { name, email, phone, specialisation, password } = req.body;
+      const { name, email, phone, specialisation, password, recaptchaToken } = req.body;
+
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
 
       // Insert into Doctors table
       const { data, error } = await supabase
@@ -67,7 +102,13 @@ try {
 
   app.post("/api/doctors/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, recaptchaToken } = req.body;
+      
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
       
       // Find doctor by email in Doctors table (note capital D)
       const { data: doctor, error } = await supabase
@@ -101,7 +142,13 @@ try {
   // Patient (User) Authentication
   app.post("/api/users/signup", async (req, res) => {
     try {
-      const { name, email, phone, password } = req.body;
+      const { name, email, phone, password, recaptchaToken } = req.body;
+
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
 
       // Insert into Users table
       const { data, error } = await supabase
@@ -118,7 +165,13 @@ try {
 
   app.post("/api/users/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, recaptchaToken } = req.body;
+      
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
       
       // Find user by email in Users table (note capital U)
       const { data: user, error } = await supabase
@@ -280,7 +333,13 @@ try {
   // Create a new booking endpoint
   app.post("/api/bookings", async (req, res) => {
     try {
-      const { user_id, doctor_id, address, test_type, appointment_time } = req.body;
+      const { user_id, doctor_id, address, test_type, appointment_time, recaptchaToken } = req.body;
+      
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
       
       console.log("Creating booking:", {
         user_id,
@@ -300,9 +359,9 @@ try {
         .from("Bookings")
         .insert({
           user_id,
-          doctor_id: doctor_id || null, // Make doctor optional
+          doctor_id: doctor_id || null,
           address,
-          test_type, 
+          test_type,
           appointment_time
         })
         .select();
@@ -441,7 +500,13 @@ try {
   // For creating bookings
   app.post("/bookings", async (req, res) => {
     try {
-      const { user_id, doctor_id, address, test_type, appointment_time } = req.body;
+      const { user_id, doctor_id, address, test_type, appointment_time, recaptchaToken } = req.body;
+      
+      // VERIFY RECAPTCHA FIRST
+      const isRecaptchaValid = await verifyRecaptcha(recaptchaToken);
+      if (!isRecaptchaValid) {
+        return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' });
+      }
       
       console.log("Creating booking:", {
         user_id,
