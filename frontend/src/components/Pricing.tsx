@@ -1,0 +1,9 @@
+const Pricing = () => {
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="text-4xl font-bold text-gray-800">Pricing</h1>
+    </div>
+  );
+};
+
+export default Pricing;
