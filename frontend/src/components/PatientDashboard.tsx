@@ -2,6 +2,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../services/api';
+import CalendarActions from '../components/CalendarActions'; // Adjust the import based on your file structure
 
 interface Booking {
   id: number;
@@ -119,6 +120,7 @@ const PatientDashboard = () => {
                     <th className="py-2 px-4 border-b text-left">Test/Service</th>
                     <th className="py-2 px-4 border-b text-left">Doctor</th>
                     <th className="py-2 px-4 border-b text-left">Address</th>
+                    <th className="py-2 px-4 border-b text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,6 +134,19 @@ const PatientDashboard = () => {
                           : 'No specific doctor'}
                       </td>
                       <td className="py-2 px-4 border-b">{booking.address}</td>
+                      <td className="py-2 px-4 border-b">
+                        <CalendarActions 
+                          appointment={{
+                            id: booking.id,
+                            test_type: booking.test_type,
+                            appointment_time: booking.appointment_time,
+                            address: booking.address,
+                            doctor_name: booking.Doctors ? `${booking.Doctors.name} (${booking.Doctors.specialisation})` : 'No specific doctor',
+                            patient_name: localStorage.getItem('userName') || 'Patient',
+                            user_type: 'patient'
+                          }} 
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

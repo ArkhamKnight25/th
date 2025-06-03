@@ -1,8 +1,9 @@
 import { useAuth } from '../context/AuthContext';
-import { useEffect, useState, useRef } from 'react'; // Add useRef
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../services/api';
-import ReCaptcha, { ReCaptchaRef } from './ReCaptcha'; // Add this import
+import ReCaptcha, { ReCaptchaRef } from './ReCaptcha';
+import CalendarActions from './CalendarActions'; // Add this import
 
 interface Doctor {
   id: number;
@@ -172,6 +173,7 @@ const BookingForm = () => {
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState<any>(null); // Store booking details
   
   // ADD RECAPTCHA REF
   const recaptchaRef = useRef<ReCaptchaRef>(null);
@@ -319,19 +321,26 @@ const BookingForm = () => {
         throw new Error(errorMessage);
       }
       
+      const bookingResult = await response.json();
+      
+      // Store booking details for calendar integration
+      const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+      setBookingSuccess({
+        id: bookingResult.id,
+        test_type: testType,
+        appointment_time: appointmentDateTime.toISOString(),
+        address: address,
+        doctor_name: selectedDoctor?.name || 'Healthcare Provider',
+        patient_name: localStorage.getItem('userName'),
+        user_type: 'patient'
+      });
+      
       setSuccess(true);
       
-      // Reset form
-      setAddress('');
-      setTestType(testTypes[0] || '');
-      setAppointmentDate('');
-      setAppointmentTime('');
-      setSelectedDoctorId(null);
-      
-      // Redirect to dashboard after a delay
-      setTimeout(() => {
-        navigate('/patient-dashboard');
-      }, 2000);
+      // Don't redirect immediately - let user add to calendar first
+      // setTimeout(() => {
+      //   navigate('/patient-dashboard');
+      // }, 3000);
       
     } catch (error) {
       if (error instanceof Error) {
@@ -346,6 +355,21 @@ const BookingForm = () => {
     }
   };
   
+  // Reset form function
+  const resetForm = () => {
+    setAddress('');
+    setTestType(testTypes[0] || '');
+    setAppointmentDate('');
+    setAppointmentTime('');
+    setSelectedDoctorId(null);
+    setSuccess(false);
+    setBookingSuccess(null);
+  };
+
+  const goToDashboard = () => {
+    navigate('/patient-dashboard');
+  };
+  
   // Get tomorrow's date for min date in the date picker
   const getTomorrow = () => {
     const tomorrow = new Date();
@@ -358,131 +382,165 @@ const BookingForm = () => {
       <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Book an Appointment</h1>
         
-        {success && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            Booking successful! Redirecting to dashboard...
-          </div>
-        )}
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Address Field */}
-          <div>
-            <label htmlFor="address" className="block text-gray-700 text-sm font-bold mb-2">
-              Address
-            </label>
-            <textarea
-              id="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              rows={3}
-              required
-              placeholder="Enter your full address"
-            />
-          </div>
-          
-          {/* Test Type Dropdown */}
-          <div>
-            <label htmlFor="testType" className="block text-gray-700 text-sm font-bold mb-2">
-              Test Type
-            </label>
-            <select
-              id="testType"
-              value={testType}
-              onChange={(e) => setTestType(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              required
-            >
-              <option value="">-- Select a test type --</option>
-              {testTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Date and Time Pickers */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="appointmentDate" className="block text-gray-700 text-sm font-bold mb-2">
-                Appointment Date
-              </label>
-              <input
-                id="appointmentDate"
-                type="date"
-                value={appointmentDate}
-                onChange={(e) => setAppointmentDate(e.target.value)}
-                min={getTomorrow()}
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                required
-              />
+        {success && bookingSuccess ? (
+          // SUCCESS STATE - Show calendar options
+          <div className="space-y-6">
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+              ✅ <strong>Booking Successful!</strong> Your appointment has been scheduled.
             </div>
             
-            <div>
-              <label htmlFor="appointmentTime" className="block text-gray-700 text-sm font-bold mb-2">
-                Appointment Time
-              </label>
-              <input
-                id="appointmentTime"
-                type="time"
-                value={appointmentTime}
-                onChange={(e) => setAppointmentTime(e.target.value)}
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                required
-              />
+            <div className="bg-white border rounded-lg p-4">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Appointment Details</h2>
+              <div className="space-y-2 text-sm">
+                <p><strong>Test Type:</strong> {bookingSuccess.test_type}</p>
+                <p><strong>Date & Time:</strong> {new Date(bookingSuccess.appointment_time).toLocaleString()}</p>
+                <p><strong>Doctor:</strong> {bookingSuccess.doctor_name}</p>
+                <p><strong>Address:</strong> {bookingSuccess.address}</p>
+              </div>
+            </div>
+            
+            {/* Calendar Actions */}
+            <CalendarActions appointment={bookingSuccess} />
+            
+            <div className="flex space-x-4">
+              <button
+                onClick={resetForm}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors"
+              >
+                Book Another Appointment
+              </button>
+              <button
+                onClick={goToDashboard}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors"
+              >
+                Go to Dashboard
+              </button>
             </div>
           </div>
-          
-          {/* Doctor Selection */}
-          <div>
-            <label htmlFor="doctor" className="block text-gray-700 text-sm font-bold mb-2">
-              Preferred Doctor (Optional)
-            </label>
-            {doctorsLoading ? (
-              <p className="text-gray-500">Loading doctors...</p>
-            ) : (
-              <select
-                id="doctor"
-                value={selectedDoctorId || ''}
-                onChange={(e) => setSelectedDoctorId(e.target.value ? parseInt(e.target.value) : null)}
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              >
-                <option value="">-- No specific doctor --</option>
-                {doctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    Dr. {doctor.name} - {doctor.specialisation}
-                  </option>
-                ))}
-              </select>
+        ) : (
+          // BOOKING FORM
+          <>
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
             )}
-            {!doctorsLoading && doctors.length === 0 && (
-              <p className="text-sm text-yellow-600 mt-1">
-                No doctors available. You can continue without selecting a doctor.
-              </p>
-            )}
-          </div>
-          
-          {/* ADD RECAPTCHA HERE */}
-          <ReCaptcha ref={recaptchaRef} />
-          
-          {/* Submit Button */}
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-300 disabled:opacity-50"
-            >
-              {loading ? 'Processing...' : 'Book Appointment'}
-            </button>
-          </div>
-        </form>
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Address Field */}
+              <div>
+                <label htmlFor="address" className="block text-gray-700 text-sm font-bold mb-2">
+                  Address
+                </label>
+                <textarea
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  rows={3}
+                  required
+                  placeholder="Enter your full address"
+                />
+              </div>
+              
+              {/* Test Type Dropdown */}
+              <div>
+                <label htmlFor="testType" className="block text-gray-700 text-sm font-bold mb-2">
+                  Test Type
+                </label>
+                <select
+                  id="testType"
+                  value={testType}
+                  onChange={(e) => setTestType(e.target.value)}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  required
+                >
+                  <option value="">-- Select a test type --</option>
+                  {testTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Date and Time Pickers */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="appointmentDate" className="block text-gray-700 text-sm font-bold mb-2">
+                    Appointment Date
+                  </label>
+                  <input
+                    id="appointmentDate"
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    min={getTomorrow()}
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="appointmentTime" className="block text-gray-700 text-sm font-bold mb-2">
+                    Appointment Time
+                  </label>
+                  <input
+                    id="appointmentTime"
+                    type="time"
+                    value={appointmentTime}
+                    onChange={(e) => setAppointmentTime(e.target.value)}
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    required
+                  />
+                </div>
+              </div>
+              
+              {/* Doctor Selection */}
+              <div>
+                <label htmlFor="doctor" className="block text-gray-700 text-sm font-bold mb-2">
+                  Preferred Doctor (Optional)
+                </label>
+                {doctorsLoading ? (
+                  <p className="text-gray-500">Loading doctors...</p>
+                ) : (
+                  <select
+                    id="doctor"
+                    value={selectedDoctorId || ''}
+                    onChange={(e) => setSelectedDoctorId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  >
+                    <option value="">-- No specific doctor --</option>
+                    {doctors.map((doctor) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        Dr. {doctor.name} - {doctor.specialisation}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!doctorsLoading && doctors.length === 0 && (
+                  <p className="text-sm text-yellow-600 mt-1">
+                    No doctors available. You can continue without selecting a doctor.
+                  </p>
+                )}
+              </div>
+              
+              {/* reCAPTCHA */}
+              <ReCaptcha ref={recaptchaRef} />
+              
+              {/* Submit Button */}
+              <div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-300 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : 'Book Appointment'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
